@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Lopes Entretenimento</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body id="body-app">
+
+<!-- 1. TELA DE AUTORIZAÇÃO (CHAVE) -->
+<div id="tela-autorizacao">
+    <div id="box-chave">
+        <img src="https://i.ibb.co/L6M0hD8/lion-mascot.png" id="logo-grande">
+        <h2 id="titulo-autorizacao">AUTORIZAÇÃO</h2>
+        <p style="color:#aaa; font-size:14px;">Insira sua chave de acesso Lopes</p>
+        <input type="password" id="input-chave" placeholder="Chave de Acesso">
+        <button id="btn-validar" onclick="validarAcesso()">ENTRAR</button>
+    </div>
+</div>
+
+<!-- 2. TELA DE CONFIGURAÇÃO (LISTA M3U) -->
+<div id="tela-config" style="display:none;">
+    <div id="box-config">
+        <img src="https://i.ibb.co/L6M0hD8/lion-mascot.png" id="logo-media">
+        <h2 id="titulo-config">CONFIGURAR LISTA</h2>
+        <p style="color:#aaa; font-size:14px;">Cole o link da sua lista M3U abaixo</p>
+        <input type="text" id="url-m3u" placeholder="http://servidor.com/lista.m3u">
+        <button id="btn-carregar" onclick="processarLista()">CARREGAR CONTEÚDO</button>
+        <p id="status-carregamento" style="color:#f4b400; font-size:12px; margin-top:10px;"></p>
+    </div>
+</div>
+
+<!-- 3. INTERFACE PRINCIPAL (CANAIS, FILMES, SÉRIES) -->
+<div id="interface-principal" style="display:none;">
+    <header id="header-app">
+        <div id="header-logo-area">
+            <img src="https://i.ibb.co/L6M0hD8/lion-mascot.png" id="logo-mini">
+            <span id="txt-marca">LOPES TV</span>
+        </div>
+        <button id="btn-sair" onclick="resetarApp()">Trocar Lista</button>
+    </header>
+
+    <div id="menu-abas">
+        <button class="aba-item ativa" id="aba-live" onclick="mudarAba('live')"><i class="fa fa-tv"></i> CANAIS</button>
+        <button class="aba-item" id="aba-movie" onclick="mudarAba('movie')"><i class="fa fa-film"></i> FILMES</button>
+        <button class="aba-item" id="aba-series" onclick="mudarAba('series')"><i class="fa fa-clapperboard"></i> SÉRIES</button>
+    </div>
+
+    <main id="grade-conteudo"></main>
+</div>
+
+<!-- 4. PLAYER DE VÍDEO -->
+<div id="tela-player">
+    <div id="btn-fechar-player" onclick="pararVideo()">
+        <i class="fa fa-arrow-left"></i> VOLTAR
+    </div>
+    <video id="video-elemento" controls autoplay playsinline></video>
+</div>
+
+<script>
+    // --- MAKESTYLES (OBJETO DE ESTILOS) ---
+    const makeStyles = {
+        body: "background: #050505; color: white; margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif;",
+        overlay: "position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; align-items: center; justify-content: center;",
+        box: "background: #111; padding: 40px; border-radius: 25px; border: 2px solid #f4b400; text-align: center; width: 85%; max-width: 350px; box-shadow: 0 0 30px rgba(244,180,0,0.2);",
+        logoGrande: "width: 120px; border-radius: 50%; border: 3px solid #f4b400; margin-bottom: 20px;",
+        logoMedia: "width: 80px; border-radius: 50%; border: 2px solid #f4b400; margin-bottom: 15px;",
+        logoMini: "width: 40px; border-radius: 50%; border: 1px solid #f4b400;",
+        input: "width: 100%; padding: 15px; margin: 15px 0; border-radius: 12px; border: 1px solid #333; background: #000; color: white; box-sizing: border-box; font-size: 16px; outline: none;",
+        button: "width: 100%; padding: 15px; background: #f4b400; color: #000; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s;",
+        header: "background: #000; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f4b400;",
+        abas: "display: flex; background: #111; justify-content: space-around; padding: 10px 0; border-bottom: 1px solid #222;",
+        abaItem: "background: none; border: none; color: #777; font-weight: bold; cursor: pointer; font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 5px;",
+        grade: "height: calc(100vh - 160px); overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 20px;",
+        cartao: "background: #121212; border-radius: 12px; overflow: hidden; border: 2px solid #222; text-align: center; transition: 0.3s; cursor: pointer;",
+        player: "position: fixed; inset: 0; background: #000; display: none; z-index: 11000;",
+        btnVoltar: "position: absolute; top: 30px; left: 20px; background: #f4b400; color: #000; padding: 12px 25px; border-radius: 30px; font-weight: bold; cursor: pointer; z-index: 12000; box-shadow: 0 5px 15px rgba(0,0,0,0.5);"
+    };
+
+    // Aplicar Estilos Dinamicamente
+    function aplicarEstilos() {
+        document.getElementById('body-app').style = makeStyles.body;
+        document.getElementById('tela-autorizacao').style = makeStyles.overlay;
+        document.getElementById('tela-config').style = makeStyles.overlay;
+        document.getElementById('box-chave').style = makeStyles.box;
+        document.getElementById('box-config').style = makeStyles.box;
+        document.getElementById('logo-grande').style = makeStyles.logoGrande;
+        document.getElementById('logo-media').style = makeStyles.logoMedia;
+        document.getElementById('logo-mini').style = makeStyles.logoMini;
+        document.querySelectorAll('input').forEach(i => i.style = makeStyles.input);
+        document.querySelectorAll('button').forEach(b => { if(b.id !== 'btn-sair') b.style = makeStyles.button; });
+        document.getElementById('header-app').style = makeStyles.header;
+        document.getElementById('menu-abas').style = makeStyles.abas;
+        document.querySelectorAll('.aba-item').forEach(a => a.style = makeStyles.abaItem);
+        document.getElementById('grade-conteudo').style = makeStyles.grade;
+        document.getElementById('tela-player').style = makeStyles.player;
+        document.getElementById('btn-fechar-player').style = makeStyles.btnVoltar;
+    }
+
+    // --- LÓGICA DO APLICATIVO ---
+    const CHAVE_MESTRA = "LOPES-2026";
+    let dbTotal = { live: [], movie: [], series: [] };
+    let abaAtual = 'live';
+    const hls = new Hls();
+
+    function validarAcesso() {
+        const chaveInput = document.getElementById('input-chave').value;
+        if(chaveInput === CHAVE_MESTRA) {
+            localStorage.setItem('lopes_auth', 'true');
+            document.getElementById('tela-autorizacao').style.display = 'none';
+            verificarListaSalva();
+        } else {
+            alert("Chave de acesso inválida! Verifique com o administrador.");
+        }
+    }
+
+    function verificarListaSalva() {
+        const listaSalva = localStorage.getItem('lopes_m3u_url');
+        if(listaSalva) {
+            document.getElementById('url-m3u').value = listaSalva;
+            processarLista();
+        } else {
+            document.getElementById('tela-config').style.display = 'flex';
+        }
+    }
+
+    async function processarLista() {
+        const url = document.getElementById('url-m3u').value;
+        const status = document.getElementById('status-carregamento');
+        if(!url) return alert("Por favor, insira o link da lista M3U.");
+
+        status.innerText = "Sincronizando com servidor Lopes...";
+        
+        try {
+            // Proxy para evitar erro de segurança (CORS) no celular
+            const proxy = "https://api.allorigins.win/raw?url=";
+            const res = await fetch(proxy + encodeURIComponent(url));
+            const data = await res.text();
+            
+            parsearM3U(data);
+            localStorage.setItem('lopes_m3u_url', url);
+            
+            document.getElementById('tela-config').style.display = 'none';
+            document.getElementById('interface-principal').style.display = 'flex';
+            renderizarGrade();
+        } catch (e) {
+            status.innerText = "Erro ao carregar! Verifique o link da lista.";
+        }
+    }
+
+    function parsearM3U(data) {
+        dbTotal = { live: [], movie: [], series: [] };
+        const linhas = data.split('\n');
+        let tempObj = {};
+
+        linhas.forEach(linha => {
+            if(linha.startsWith('#EXTINF:')) {
+                tempObj.nome = linha.split(',')[1] || "Sem Nome";
+                const logoMatch = linha.match(/tvg-logo="([^"]+)"/);
+                tempObj.logo = logoMatch ? logoMatch[1] : "";
+                const groupMatch = (linha.match(/group-title="([^"]+)"/) || ["",""])[1].toLowerCase();
+                
+                // Inteligência para separar conteúdo
+                if(groupMatch.includes('serie') || groupMatch.includes('show') || tempObj.nome.match(/S\d+ E\d+/i)) {
+                    tempObj.tipo = 'series';
+                } else if(groupMatch.includes('filme') || groupMatch.includes('movie') || groupMatch.includes('cinema')) {
+                    tempObj.tipo = 'movie';
+                } else {
+                    tempObj.tipo = 'live';
+                }
+            } else if(linha.startsWith('http')) {
+                tempObj.url = linha.trim();
+                dbTotal[tempObj.tipo || 'live'].push({...tempObj});
+                tempObj = {};
+            }
+        });
+    }
+
+    function renderizarGrade() {
+        const grade = document.getElementById('grade-conteudo');
+        grade.innerHTML = "";
+        const itens = dbTotal[abaAtual] || [];
+
+        itens.slice(0, 300).forEach(item => {
+            const card = document.createElement('div');
+            card.style = makeStyles.cartao;
+            card.innerHTML = `
+                <img src="${item.logo}" onerror="this.src='https://via.placeholder.com/150x225?text=Lopes+Entretenimento'" style="width:100%; aspect-ratio:2/3; object-fit:cover; display:block;">
+                <div style="padding:8px; font-size:11px; height:28px; overflow:hidden; display:flex; align-items:center; justify-content:center;">${item.nome}</div>
+            `;
+            card.onclick = () => iniciarPlayer(item.url);
+            grade.appendChild(card);
+        });
+    }
+
+    function mudarAba(aba) {
+        abaAtual = aba;
+        document.querySelectorAll('.aba-item').forEach(btn => btn.classList.remove('ativa'));
+        document.getElementById(`aba-${aba}`).classList.add('ativa');
+        renderizarGrade();
+    }
+
+    function iniciarPlayer(url) {
+        document.getElementById('tela-player').style.display = 'block';
+        const video = document.getElementById('video-elemento');
+        
+        if (Hls.isSupported() && url.includes('m3u8')) {
+            hls.loadSource(url); hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        } else {
+            video.src = url;
+            video.play().catch(e => alert("O servidor de vídeo não respondeu. Tente novamente."));
+        }
+    }
+
+    function pararVideo() {
+        const video = document.getElementById('video-elemento');
+        video.pause();
+        hls.detachMedia();
+        document.getElementById('tela-player').style.display = 'none';
+    }
+
+    function resetarApp() {
+        localStorage.removeItem('lopes_m3u_url');
+        location.reload();
+    }
+
+    // Inicialização
+    window.onload = () => {
+        aplicarEstilos();
+        if(localStorage.getItem('lopes_auth') === 'true') {
+            document.getElementById('tela-autorizacao').style.display = 'none';
+            verificarListaSalva();
+        }
+    };
+</script>
+
+<style>
+    /* Estilos de estado que o makeStyles não cobre facilmente */
+    .aba-item.ativa { color: #f4b400 !important; border-bottom: 2px solid #f4b400 !important; }
+    #btn-sair { background: none; border: 1px solid #f4b400; color: #f4b400; padding: 5px 12px; border-radius: 15px; cursor: pointer; font-size: 11px; }
+    #btn-sair:hover { background: #f4b400; color: #000; }
+</style>
+
+</body>
+</html>
